@@ -1,62 +1,32 @@
-require('dotenv').config()
+const config = require('./utils/config')
 const express = require('express')
-
-const generateId = require('./utils/generateId.js');
-
-const NoteModel = require('./models/NoteModel.js');
-
 const app = express()
+const cors = require('cors')
+const notesRouter = require('./controllers/notes')
+const middleware = require('./utils/middleware')
+const logger = require('./utils/logger')
+const mongoose = require('mongoose')
+
+mongoose.set('strictQuery', false)
+
+logger.info('connecting to', config.MONGODB_URI)
+
+mongoose.connect(config.MONGODB_URI)
+  .then(() => {
+    logger.info('connected to MongoDB')
+  })
+  .catch((error) => {
+    logger.error('error connecting to MongoDB:', error.message)
+  })
+
+app.use(cors())
+app.use(express.static('dist'))
 app.use(express.json())
+app.use(middleware.requestLogger)
 
-app.get('/', (request, response) => {
-  response.send('<h1>Hello World!</h1>')
-})
+app.use('/api/notes', notesRouter)
 
-app.get('/api/notes', (request, response) => {
-  NoteModel.find({}).then(notes => {
-    response.json(notes)
-  })
-})
+app.use(middleware.unknownEndpoint)
+app.use(middleware.errorHandler)
 
-app.get('/api/notes/:id', (request, response) => {
-  const id = request.params.id
-  NoteModel.findById(id).then(note => {
-    response.json(note)
-  }).catch(() => {
-    response.status(404).json({
-      error: 'Note not found'
-    })
-  })
-})
-
-app.post('/api/notes', (request, response) => {
-  const body = request.body
-  
-  if(body.content == undefined){
-    return response.status(400).json({
-        error: 'Content missing'
-    })
-  }
-
-  const note = new NoteModel({
-    id: generateId(),
-    content: body.content,
-    important: body.important || false
-  })
-  
-  note.save().then(savedNote => {
-    response.json(savedNote)
-  })
-})
-
-app.delete('/api/notes/:id', (request, response) => {
-  const id = Number(request.params.id)
-  notes = notes.filter(note => note.id !== id)
-
-  response.status(204).end()
-})
-
-const PORT = process.env.PORT
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-})
+module.exports = app
